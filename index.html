@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INDUWARA | Website Collection</title>
+    <style>
+        /* Neon Preloader CSS */
+        #preloader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100vh;
+            background: #000; display: flex; justify-content: center;
+            align-items: center; z-index: 9999; transition: opacity 0.8s ease;
+        }
+        .ld-ne3 {
+            font-family: Arial, sans-serif; font-size: 3rem; font-weight: bold;
+            color: #fff; text-transform: uppercase; letter-spacing: 10px;
+            animation: neon-glow 1.5s ease-in-out infinite alternate;
+        }
+        @keyframes neon-glow {
+            0% { text-shadow: 0 0 10px #fff, 0 0 20px #007bff; opacity: 0.5; }
+            100% { text-shadow: 0 0 20px #fff, 0 0 40px #00d4ff; opacity: 1; }
+        }
+
+        /* UI CSS */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            overflow: hidden;
+        }
+        .wrapper {
+            position: relative; width: 400px; height: 440px;
+            background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px; backdrop-filter: blur(15px);
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5); display: flex;
+            justify-content: center; align-items: center; transition: height .3s ease;
+            opacity: 0; visibility: hidden;
+        }
+        .wrapper.active { height: 520px; }
+        .form-box { width: 100%; padding: 40px; }
+        .wrapper.active .login { display: none; }
+        .register { display: none; }
+        .wrapper.active .register { display: block; }
+        h2 { font-size: 2em; color: #fff; text-align: center; margin-bottom: 20px; }
+        .input-group { position: relative; width: 100%; height: 50px; border-bottom: 2px solid #fff; margin: 30px 0; }
+        .input-group label { position: absolute; top: 50%; left: 5px; transform: translateY(-50%); color: #fff; transition: .5s; pointer-events: none; }
+        .input-group input:focus~label, .input-group input:valid~label { top: -5px; }
+        .input-group input { width: 100%; height: 100%; background: transparent; border: none; outline: none; color: #fff; font-size: 1em; padding: 0 5px; }
+        .btn { width: 100%; height: 45px; background: #00d4ff; border: none; border-radius: 40px; cursor: pointer; font-size: 1em; color: #fff; font-weight: 600; transition: .3s; }
+        .btn:hover { background: #007bff; }
+        .login-register { font-size: .9em; color: #fff; text-align: center; margin-top: 25px; }
+        .login-register p a { color: #00d4ff; text-decoration: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <div id="preloader"><div class="ld-ne3">LOADING</div></div>
+
+    <div class="wrapper" id="wrapper">
+        <div class="form-box login">
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="input-group"><input type="email" id="loginEmail" required><label>Email</label></div>
+                <div class="input-group"><input type="password" id="loginPassword" required><label>Password</label></div>
+                <button type="submit" class="btn">Login</button>
+                <div class="login-register"><p>Don't have an account? <a href="#" onclick="registerActive()">Register</a></p></div>
+            </form>
+        </div>
+
+        <div class="form-box register">
+            <h2>Registration</h2>
+            <form id="registerForm">
+                <div class="input-group"><input type="text" id="regUser" required><label>Username</label></div>
+                <div class="input-group"><input type="email" id="regEmail" required><label>Email</label></div>
+                <div class="input-group"><input type="password" id="regPass" required><label>Password</label></div>
+                <button type="submit" class="btn">Register</button>
+                <div class="login-register"><p>Already have an account? <a href="#" onclick="loginActive()">Login</a></p></div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCkdgID-HPsHajqzjutwPup7Q-FfLqYqQw",
+            authDomain: "source-code-library-f9552.firebaseapp.com",
+            databaseURL: "https://source-code-library-f9552-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "source-code-library-f9552",
+            storageBucket: "source-code-library-f9552.firebasestorage.app",
+            messagingSenderId: "735357035791",
+            appId: "1:735357035791:web:199e063c065bfe68b74a7a"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const wrapper = document.getElementById('wrapper');
+        const preloader = document.getElementById('preloader');
+
+        window.registerActive = () => wrapper.classList.add('active');
+        window.loginActive = () => wrapper.classList.remove('active');
+
+        // Stay Logged In Logic
+        window.addEventListener('load', () => {
+            const loggedIn = localStorage.getItem('isLoggedIn');
+            const role = localStorage.getItem('userRole');
+            if(loggedIn === 'true') {
+                window.location.href = (role === 'admin') ? 'admin.html' : 'home.html';
+                return;
+            }
+            setTimeout(() => {
+                preloader.style.opacity = '0';
+                setTimeout(() => { preloader.style.display = 'none'; wrapper.style.opacity = '1'; wrapper.style.visibility = 'visible'; }, 800);
+            }, 5000);
+        });
+
+        // Registration
+        document.getElementById('registerForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('regEmail').value;
+            const cleanId = email.replace(/\./g, '_');
+            set(ref(db, 'users/' + cleanId), {
+                username: document.getElementById('regUser').value,
+                email: email,
+                password: document.getElementById('regPass').value,
+                status: "pending"
+            }).then(() => { alert("Registration sent! Wait for Admin approval."); window.loginActive(); });
+        });
+
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const pass = document.getElementById('loginPassword').value;
+
+            if(email === "dinethinduwara999@gmail.com" && pass === "induwara999") {
+                localStorage.setItem('isLoggedIn', 'true'); localStorage.setItem('userRole', 'admin');
+                window.location.href = 'admin.html'; return;
+            }
+
+            const cleanId = email.replace(/\./g, '_');
+            get(child(ref(db), `users/${cleanId}`)).then((snapshot) => {
+                if (snapshot.exists() && snapshot.val().password === pass) {
+                    if (snapshot.val().status === "approved") {
+                        localStorage.setItem('isLoggedIn', 'true'); localStorage.setItem('userRole', 'user');
+                        window.location.href = 'home.html';
+                    } else alert("Account pending approval!");
+                } else alert("Invalid Credentials!");
+            });
+        });
+    </script>
+</body>
+</html>
