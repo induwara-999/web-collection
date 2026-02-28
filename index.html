@@ -395,7 +395,6 @@
 
         if(!email || !pass) return alert("Please fill in all fields.");
 
-        // Check for Admin Bypass
         if (email === ADMIN_EMAIL && pass === ADMIN_PASS) {
             auth.signInWithEmailAndPassword(email, pass).catch(() => {
                 return auth.createUserWithEmailAndPassword(email, pass);
@@ -406,7 +405,6 @@
             return;
         }
 
-        // Standard User Login
         auth.signInWithEmailAndPassword(email, pass).then(u => {
             db.ref('users/' + u.user.uid).once('value').then(s => {
                 if (s.exists() && s.val().status === 'approved') {
@@ -433,7 +431,7 @@
             showPage('login');
         }).catch(e => {
             if(e.code === "auth/email-already-in-use") {
-                alert("❌ This email is already registered. If you were rejected, please contact admin or try another email.");
+                alert("❌ This email is already registered.");
             } else {
                 alert(e.message);
             }
@@ -453,11 +451,22 @@
         const adminLink = document.getElementById('admin-link');
 
         if (user) {
-            // Real-time Database Observer for Auto-Logout when Deleted
+            // --- CRITICAL: AUTO-DELETE & LOGOUT LOGIC ---
+            // This listener checks if the user's data exists in Realtime DB.
+            // If the Admin deletes the data, this triggers immediately.
             db.ref('users/' + user.uid).on('value', snap => {
                 if (!snap.exists() && user.email !== ADMIN_EMAIL) {
-                    alert("🚫 Session Terminated: Your account has been removed by the administrator.");
-                    logout();
+                    // 1. Delete the user from Authentication permanently
+                    const currentUser = firebase.auth().currentUser;
+                    if (currentUser) {
+                        currentUser.delete().then(() => {
+                            alert("🚫 Account Terminated: The administrator has removed your account from the system.");
+                            location.reload();
+                        }).catch(() => {
+                            // If re-auth is needed, we just sign out
+                            auth.signOut().then(() => location.reload());
+                        });
+                    }
                 }
             });
 
@@ -485,7 +494,7 @@
         if(!name || !url || !img) return alert("Mandatory fields are missing!");
 
         db.ref('plans').push({ name, url, img }).then(() => {
-            alert("🚀 Success: New plan is now live in the library.");
+            alert("🚀 Success: New plan is now live.");
             document.getElementById('planName').value = '';
             document.getElementById('planUrl').value = '';
             document.getElementById('planImg').value = '';
@@ -493,7 +502,7 @@
     }
 
     function deletePlan(id) {
-        if(confirm("Action Required: Are you sure you want to remove this project from the library?")) {
+        if(confirm("Action Required: Remove this project?")) {
             db.ref('plans/' + id).remove();
         }
     }
@@ -506,8 +515,8 @@
                 if(data[id].email === ADMIN_EMAIL) continue;
                 
                 const statusBadge = data[id].status === 'pending' ? 
-                    '<span class="badge badge-pending">Pending Approval</span>' : 
-                    '<span class="badge badge-approved">Active Member</span>';
+                    '<span class="badge badge-pending">Pending</span>' : 
+                    '<span class="badge badge-approved">Active</span>';
 
                 html += `<tr>
                     <td>${data[id].email}</td>
@@ -515,14 +524,14 @@
                     <td>
                         <div style="display:flex; gap:10px;">
                             ${data[id].status === 'pending' ? 
-                            `<button class="btn btn-primary" style="padding:6px 12px; font-size:11px;" onclick="approveUser('${id}')">Approve Access</button>` : 
+                            `<button class="btn btn-primary" style="padding:6px 12px; font-size:11px;" onclick="approveUser('${id}')">Approve</button>` : 
                             `<button class="btn btn-outline" style="padding:6px 12px; font-size:11px; cursor:default;"><i class="fas fa-check"></i> Verified</button>`}
-                            <button class="btn btn-danger" style="padding:6px 12px; font-size:11px;" onclick="rejectUser('${id}')">Reject / Delete</button>
+                            <button class="btn btn-danger" style="padding:6px 12px; font-size:11px;" onclick="rejectUser('${id}')">Reject & Delete Auth</button>
                         </div>
                     </td>
                 </tr>`;
             }
-            document.getElementById('user-list').innerHTML = html || '<tr><td colspan="3" style="text-align:center;">No registration requests found.</td></tr>';
+            document.getElementById('user-list').innerHTML = html || '<tr><td colspan="3" style="text-align:center;">No requests.</td></tr>';
         });
     }
 
@@ -531,8 +540,11 @@
     }
     
     function rejectUser(uid) {
-        if(confirm("Security Alert: Delete this user? They will be force-logged out and must re-register to gain access.")) {
-            db.ref('users/' + uid).remove();
+        if(confirm("SECURITY WARNING: This will PERMANENTLY delete the user's login credentials and database record. Continue?")) {
+            // Just removing from Realtime DB triggers the user.delete() in onAuthStateChanged
+            db.ref('users/' + uid).remove().then(() => {
+                alert("User removed from Database. If the user is online, their Authentication will be wiped automatically.");
+            });
         }
     }
 
@@ -554,7 +566,7 @@
                     </div>
                 </div>`;
             }
-            document.getElementById('plans-display').innerHTML = html || '<div style="grid-column: 1/-1; text-align:center; padding:50px;"><i class="fas fa-folder-open fa-3x" style="opacity:0.2;"></i><p style="margin-top:15px; opacity:0.5;">Our library is currently being updated. Check back soon!</p></div>';
+            document.getElementById('plans-display').innerHTML = html || '<div style="grid-column: 1/-1; text-align:center; padding:50px;"><p>No plans available.</p></div>';
         });
     }
 </script>
