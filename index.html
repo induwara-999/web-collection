@@ -458,7 +458,7 @@
                     auth.signOut();
                 }
             });
-        }).catch(e => alert("Error: " + e.message));
+        }).catch(e => alert("❌ Not a member yet? Register now to get started!"));
     }
 
     function register() {
@@ -477,7 +477,7 @@
             if(e.code === "auth/email-already-in-use") {
                 alert("❌ This email is already registered.");
             } else {
-                alert(e.message);
+                alert("❌ Error: Please check your details and try again.");
             }
         });
     }
