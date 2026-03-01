@@ -683,7 +683,7 @@
     }
 
     function updatePlanPassword(id) {
-        modal.show("Update Security", "Enter new password for this plan (Leave empty for no password):", 'prompt', (newPass) => {
+        modal.show("Update Security", "Enter new password for this plan", 'prompt', (newPass) => {
             if(newPass !== null) {
                 db.ref('plans/' + id).update({ password: newPass }).then(() => {
                     modal.show("Updated", "Password updated successfully!");
