@@ -121,6 +121,8 @@
         .btn-danger { background: var(--danger); color: white; box-shadow: 0 6px 15px rgba(255, 71, 87, 0.3); }
         .btn-danger:hover { transform: scale(1.05); }
 
+        .btn-move { padding: 8px 12px; font-size: 12px; }
+
         /* --- CONTAINER & PAGES --- */
         .container { max-width: 1250px; margin: auto; padding: 50px 20px; width: 100%; }
         .page { display: none; animation: slideUp 0.6s ease-out; width: 100%; }
@@ -238,43 +240,23 @@
         .modal-body { margin-bottom: 20px; color: #94a3b8; font-size: 0.95rem; }
         .modal-footer { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
-        /* --- MOBILE MEDIA QUERIES (FIXED) --- */
+        /* --- MOBILE MEDIA QUERIES --- */
         @media (max-width: 1024px) {
             nav { padding: 15px 5%; }
             .mobile-toggle { display: block; }
-            
             .nav-links {
-                position: fixed;
-                top: 0;
-                right: -100%;
-                width: 100%; /* Full width for better centering */
-                height: 100vh;
-                background: rgba(11, 14, 20, 0.98);
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                gap: 30px;
-                padding: 40px;
-                z-index: 2000;
-                transition: 0.5s ease-in-out;
+                position: fixed; top: 0; right: -100%; width: 100%; height: 100vh;
+                background: rgba(11, 14, 20, 0.98); flex-direction: column;
+                justify-content: center; align-items: center; gap: 30px;
+                padding: 40px; z-index: 2000; transition: 0.5s ease-in-out;
             }
-
             .nav-links.active { right: 0; }
-            
             .hero h1 { font-size: 2.8rem; }
             .about-grid { grid-template-columns: 1fr; }
             .grid { grid-template-columns: 1fr; }
-            
-            .hero div { 
-                flex-direction: column !important; 
-                align-items: center;
-                width: 100%;
-            }
+            .hero div { flex-direction: column !important; align-items: center; width: 100%; }
             .hero .btn { width: 100%; max-width: 300px; }
-            
             .stats-grid { grid-template-columns: 1fr 1fr; }
-
-            /* Admin table scroll fix */
             .table-container { width: 100%; overflow-x: auto; }
             table { min-width: 600px; }
         }
@@ -436,7 +418,7 @@
             <div class="table-container">
                 <table>
                     <thead>
-                        <tr><th>Plan Name</th><th>Current Password</th><th>Actions</th></tr>
+                        <tr><th>Move</th><th>Plan Name</th><th>Current Password</th><th>Actions</th></tr>
                     </thead>
                     <tbody id="admin-plans-list"></tbody>
                 </table>
@@ -475,7 +457,7 @@
 </div>
 
 <script>
-    // --- CUSTOM MESSAGING SYSTEM (REPLACES ALERT/PROMPT) ---
+    // --- CUSTOM MESSAGING SYSTEM ---
     const modal = {
         overlay: document.getElementById('customModal'),
         title: document.getElementById('modalTitle'),
@@ -690,12 +672,16 @@
         
         if(!name || !url || !img) return modal.show("Missing Data", "Mandatory fields are missing!");
 
-        db.ref('plans').push({ name, url, img, password }).then(() => {
-            modal.show("🚀 Success", "Project published to library.");
-            document.getElementById('planName').value = '';
-            document.getElementById('planUrl').value = '';
-            document.getElementById('planImg').value = '';
-            document.getElementById('planPass').value = '';
+        db.ref('plans').once('value').then(snap => {
+            const count = snap.numChildren();
+            const nextOrder = count + 1;
+            db.ref('plans').push({ name, url, img, password, order: nextOrder }).then(() => {
+                modal.show("🚀 Success", "Project published to library.");
+                document.getElementById('planName').value = '';
+                document.getElementById('planUrl').value = '';
+                document.getElementById('planImg').value = '';
+                document.getElementById('planPass').value = '';
+            });
         });
     }
 
@@ -715,6 +701,22 @@
                 db.ref('plans/' + id).remove();
             }
         });
+    }
+
+    // Move functionality
+    function movePlan(id, direction) {
+        db.ref('plans').orderByChild('order').once('value').then(snap => {
+            let list = [];
+            snap.forEach(child => { list.push({ id: child.key, ...child.val() }); });
+            const idx = list.findIndex(p => p.id === id);
+            if(direction === 'up' && idx > 0) swapOrders(list[idx], list[idx-1]);
+            else if(direction === 'down' && idx < list.length - 1) swapOrders(list[idx], list[idx+1]);
+        });
+    }
+
+    function swapOrders(p1, p2) {
+        db.ref('plans/' + p1.id).update({ order: p2.order });
+        db.ref('plans/' + p2.id).update({ order: p1.order });
     }
 
     function loadAdminData() {
@@ -744,19 +746,34 @@
             document.getElementById('user-list').innerHTML = html || '<tr><td colspan="3">No requests.</td></tr>';
         });
 
+        // Plan Management with auto-indexing fix
         db.ref('plans').on('value', snap => {
+            let list = [];
+            snap.forEach(child => { list.push({ id: child.key, ...child.val() }); });
+
+            // Fix missing orders
+            list.forEach((p, i) => {
+                if(p.order === undefined) db.ref('plans/' + p.id).update({ order: i + 1 });
+            });
+
+            list.sort((a, b) => a.order - b.order);
+
             let html = '';
-            const data = snap.val();
-            for(let id in data) {
+            list.forEach(p => {
                 html += `<tr>
-                    <td>${data[id].name}</td>
-                    <td>${data[id].password || '<i style="color:gray">None</i>'}</td>
                     <td>
-                        <button class="btn btn-primary" style="padding:6px 12px; font-size:11px;" onclick="updatePlanPassword('${id}')">Change Pass</button>
+                        <button class="btn btn-primary btn-move" onclick="movePlan('${p.id}', 'up')"><i class="fas fa-arrow-up"></i></button>
+                        <button class="btn btn-primary btn-move" onclick="movePlan('${p.id}', 'down')"><i class="fas fa-arrow-down"></i></button>
+                    </td>
+                    <td>${p.name}</td>
+                    <td>${p.password || '<i style="color:gray">None</i>'}</td>
+                    <td>
+                        <button class="btn btn-primary" style="padding:6px 12px; font-size:11px;" onclick="updatePlanPassword('${p.id}')">Change Pass</button>
+                        <button class="btn btn-danger" style="padding:6px 12px; font-size:11px;" onclick="deletePlan('${p.id}')"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`;
-            }
-            document.getElementById('admin-plans-list').innerHTML = html || '<tr><td colspan="3">No plans.</td></tr>';
+            });
+            document.getElementById('admin-plans-list').innerHTML = html || '<tr><td colspan="4">No plans.</td></tr>';
         });
     }
 
@@ -774,7 +791,7 @@
 
     // --- LIBRARY LOADING ---
     function accessPlan(id, url, correctPass) {
-        if(!correctPass || correctPass === "") {
+        if(!correctPass || correctPass === "" || correctPass === "undefined") {
             window.open(url);
         } else {
             modal.show("Password Required", "This plan is protected. Please enter the access key:", 'prompt', (userPass) => {
@@ -788,27 +805,25 @@
     }
 
     function loadPlans() {
-        db.ref('plans').on('value', snap => {
+        db.ref('plans').orderByChild('order').on('value', snap => {
             let html = '';
-            const data = snap.val();
-            const isAdmin = auth.currentUser && auth.currentUser.email === ADMIN_EMAIL;
-
-            for(let id in data) {
+            // Admin checks kept but delete button logic removed for service page display
+            snap.forEach(child => {
+                const id = child.key;
+                const plan = child.val();
                 html += `
                 <div class="plan-card">
-                    <img src="${data[id].img}" alt="Preview" onerror="this.src='https://via.placeholder.com/400x220/1e293b/ffffff?text=SourceCode+Library'">
+                    <img src="${plan.img}" alt="Preview" onerror="this.src='https://via.placeholder.com/400x220/1e293b/ffffff?text=SourceCode+Library'">
                     <div class="plan-info">
-                        <h3>${data[id].name} ${data[id].password ? '<i class="fas fa-lock" style="font-size:0.8rem; color:var(--warning)"></i>' : ''}</h3>
-                        <button class="btn btn-primary" style="width:100%;" onclick="accessPlan('${id}', '${data[id].url}', '${data[id].password || ""}')">Access Library <i class="fas fa-external-link-alt"></i></button>
-                        ${isAdmin ? `<button class="btn btn-danger" style="width:100%; margin-top:15px; font-size:11px;" onclick="deletePlan('${id}')"><i class="fas fa-trash"></i> Delete Plan</button>` : ''}
+                        <h3>${plan.name} ${plan.password ? '<i class="fas fa-lock" style="font-size:0.8rem; color:var(--warning)"></i>' : ''}</h3>
+                        <button class="btn btn-primary" style="width:100%;" onclick="accessPlan('${id}', '${plan.url}', '${plan.password || ""}')">Access Library <i class="fas fa-external-link-alt"></i></button>
                     </div>
                 </div>`;
-            }
+            });
             document.getElementById('plans-display').innerHTML = html || '<div style="grid-column: 1/-1; text-align:center; padding:50px;"><p>No plans found.</p></div>';
         });
     }
 
-    // Prevent horizontal dragging on mobile
     window.addEventListener('dragstart', function(e) {
         e.preventDefault();
     });
