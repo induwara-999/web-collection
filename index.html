@@ -148,10 +148,12 @@ background: transparent; border: 2px solid var(--primary); color: white;
     overflow: hidden;
     border: 4px solid var(--glass);
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
 #preview-iframe {
     width: 100%;
-    height: 100%;
+    flex: 1;
     border: none;
 }
 .preview-header {
@@ -160,20 +162,20 @@ background: transparent; border: 2px solid var(--primary); color: white;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
 }
 .fullscreen-btn {
     position: absolute;
     top: 10px;
     right: 10px;
     z-index: 10;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.6);
     color: white;
     border: none;
-    padding: 8px;
-    border-radius: 5px;
+    padding: 8px 12px;
+    border-radius: 8px;
     cursor: pointer;
+    font-size: 0.8rem;
+    backdrop-filter: blur(5px);
 }
 
 /* --- CONTAINER & PAGES --- */
@@ -382,7 +384,7 @@ table { min-width: 600px; }
 
 <section id="previewer" class="page">
     <div style="text-align: center; margin-bottom: 30px;">
-        <h2 style="font-size: 2.5rem; margin-bottom: 10px;">Live <span style="color:var(--accent)">Live Code</span></h2>
+        <h2 style="font-size: 2.5rem; margin-bottom: 10px;">Live <span style="color:var(--accent)">Code Previewer</span></h2>
         <p style="color:#94a3b8;">Write your HTML, CSS, and JS to see instant results.</p>
     </div>
     <div class="preview-header">
@@ -390,26 +392,26 @@ table { min-width: 600px; }
             <button class="btn btn-primary btn-move" onclick="runPreview()"><i class="fas fa-play"></i> Run Code</button>
             <button class="btn btn-outline btn-move" onclick="clearEditor()"><i class="fas fa-trash"></i> Clear</button>
         </div>
-        <p id="save-status" style="font-size:0.8rem; color:var(--success);"></p>
+        <p id="sync-status" style="font-size:0.8rem; color:var(--success);"></p>
     </div>
     <div class="editor-container">
         <div class="code-inputs">
             <div class="code-box">
                 <label><i class="fab fa-html5"></i> HTML</label>
-                <textarea id="html-code" placeholder="Enter HTML here..." oninput="syncCodeToFirebase()"><h1>Hello World</h1></textarea>
+                <textarea id="html-code" placeholder="Enter HTML here..." oninput="syncToFirebase()"><h1>Hello World</h1></textarea>
             </div>
             <div class="code-box">
                 <label><i class="fab fa-css3-alt"></i> CSS</label>
-                <textarea id="css-code" placeholder="Enter CSS here..." oninput="syncCodeToFirebase()">h1 { color: #6366f1; text-align: center; font-family: sans-serif; }</textarea>
+                <textarea id="css-code" placeholder="Enter CSS here..." oninput="syncToFirebase()">h1 { color: #6366f1; text-align: center; font-family: sans-serif; }</textarea>
             </div>
             <div class="code-box">
                 <label><i class="fab fa-js"></i> JavaScript</label>
-                <textarea id="js-code" placeholder="Enter JS here..." oninput="syncCodeToFirebase()">console.log('Preview Active');</textarea>
+                <textarea id="js-code" placeholder="Enter JS here..." oninput="syncToFirebase()">console.log('Preview Active');</textarea>
             </div>
         </div>
-        <div class="preview-box" id="preview-wrapper">
+        <div class="preview-box" id="preview-container">
             <button class="fullscreen-btn" onclick="toggleFullScreen()"><i class="fas fa-expand"></i> Full Screen</button>
-            <iframe id="preview-iframe"></iframe>
+            <iframe id="preview-iframe" allowfullscreen="true" sandbox="allow-scripts allow-same-origin allow-modals"></iframe>
         </div>
     </div>
 </section>
@@ -452,7 +454,7 @@ table { min-width: 600px; }
             <thead>
                 <tr><th>User Email</th><th>Actions</th></tr>
             </thead>
-            <tbody id="user-code-list"></tbody>
+            <tbody id="live-user-list"></tbody>
         </table>
     </div>
 </div>
@@ -653,43 +655,52 @@ function clearEditor() {
     document.getElementById('css-code').value = '';
     document.getElementById('js-code').value = '';
     runPreview();
-    syncCodeToFirebase();
+    syncToFirebase();
 }
 
+// Full Screen Error එක විසඳීමට මෙම නව ශ්‍රිතය භාවිතා කරන්න
 function toggleFullScreen() {
-    const wrapper = document.getElementById('preview-wrapper');
+    const container = document.getElementById('preview-container');
+    
     if (!document.fullscreenElement) {
-        wrapper.requestFullscreen().catch(err => {
-            alert(`Error attempting to enable full-screen mode: ${err.message}`);
-        });
+        // Fullscreen ඉල්ලීම (විවිධ බ්‍රව්සර් සඳහා)
+        if (container.requestFullscreen) {
+            container.requestFullscreen();
+        } else if (container.webkitRequestFullscreen) { /* Safari */
+            container.webkitRequestFullscreen();
+        } else if (container.msRequestFullscreen) { /* IE11 */
+            container.msRequestFullscreen();
+        }
     } else {
-        document.exitFullscreen();
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
     }
 }
 
-// Sync Code to Firebase for Admin to see
-let syncTimeout;
-function syncCodeToFirebase() {
+// User ලියන කේතය Admin ට පෙන්වීමට Sync කිරීම
+let syncTimer;
+function syncToFirebase() {
     const user = auth.currentUser;
     if(!user || user.email === ADMIN_EMAIL) return;
 
-    clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(() => {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
         const html = document.getElementById('html-code').value;
         const css = document.getElementById('css-code').value;
         const js = document.getElementById('js-code').value;
-        
-        db.ref('user_live_code/' + user.uid).set({
+
+        db.ref('live_codes/' + user.uid).set({
             email: user.email,
             html: html,
             css: css,
             js: js,
-            lastUpdated: firebase.database.ServerValue.TIMESTAMP
+            timestamp: firebase.database.ServerValue.TIMESTAMP
         }).then(() => {
-            document.getElementById('save-status').innerText = "Changes Saved & Synced to Admin";
-            setTimeout(() => { document.getElementById('save-status').innerText = ""; }, 2000);
+            document.getElementById('sync-status').innerText = "Live Synced to Admin ✅";
+            setTimeout(() => { document.getElementById('sync-status').innerText = ""; }, 2000);
         });
-    }, 1500);
+    }, 1000); // 1 second delay while typing
 }
 
 // --- AUTHENTICATION LOGIC ---
@@ -856,20 +867,20 @@ ${data[id].status === 'pending' ?
 document.getElementById('user-list').innerHTML = html || '<tr><td colspan="3">No requests.</td></tr>';
 });
 
-// Load user live codes for admin
-db.ref('user_live_code').on('value', snap => {
+// Admin Monitoring for Live Codes
+db.ref('live_codes').on('value', snap => {
     let html = '';
     snap.forEach(child => {
         const data = child.val();
         html += `<tr>
             <td>${data.email}</td>
-            <td><button class="btn btn-primary" style="padding:6px 12px; font-size:11px;" onclick="viewUserCode('${child.key}')">View Code</button></td>
+            <td><button class="btn btn-primary" style="padding:6px 12px; font-size:11px;" onclick="viewUserCode('${child.key}')">View Live Code</button></td>
         </tr>`;
     });
-    document.getElementById('user-code-list').innerHTML = html || '<tr><td colspan="2">No live codes available.</td></tr>';
+    document.getElementById('live-user-list').innerHTML = html || '<tr><td colspan="2">No active users.</td></tr>';
 });
 
-// Plan Management
+// Plan Management with auto-indexing fix
 db.ref('plans').on('value', snap => {
 let list = [];
 snap.forEach(child => { list.push({ id: child.key, ...child.val() }); });
@@ -897,14 +908,14 @@ document.getElementById('admin-plans-list').innerHTML = html || '<tr><td colspan
 }
 
 function viewUserCode(uid) {
-    db.ref('user_live_code/' + uid).once('value').then(snap => {
+    db.ref('live_codes/' + uid).once('value').then(snap => {
         const data = snap.val();
         document.getElementById('html-code').value = data.html;
         document.getElementById('css-code').value = data.css;
         document.getElementById('js-code').value = data.js;
         showPage('previewer');
         runPreview();
-        modal.show("Code Loaded", "You are now viewing code from: " + data.email);
+        modal.show("Success", "Loaded live code from: " + data.email);
     });
 }
 
@@ -916,7 +927,7 @@ function rejectUser(uid) {
 modal.show("Security Alert", "Permanently delete this user access?", 'confirm', (confirmed) => {
 if(confirmed) {
 db.ref('users/' + uid).remove();
-db.ref('user_live_code/' + uid).remove();
+db.ref('live_codes/' + uid).remove();
 }
 });
 }
